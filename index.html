@@ -1,0 +1,1011 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Mutation Showdown</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one screen. Top bar (name, generation track, run controls); dish over graph on the left with game panels laid over it; scoreboard, traits and mutation log in a sidebar. */
+:root {
+  --bg: #EDF1EC;
+  --surface: #F8FAF6;
+  --surface-2: #E2E9E1;
+  --ink: #15211B;
+  --muted: #52645A;
+  --line: #C6D0C7;
+  --accent: #E7A32A;
+  --accent-ink: #1A1405;
+  --focus: #0B6B52;
+  --you: #4C9A1E;
+  --rival: #7651D6;
+  --good: #1D7A4B;
+  --bad: #B0303F;
+  --panel: rgba(248, 250, 246, 0.97);
+  --font-display: 'Bricolage Grotesque', 'Avenir Next', 'Segoe UI', sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B1310; --surface: #121C17; --surface-2: #1B2822; --ink: #E4EEE8; --muted: #93A89D;
+    --line: #29392F; --accent: #EDB041; --accent-ink: #1A1405; --focus: #6FD3AE;
+    --you: #A5E05A; --rival: #B994FF; --good: #5FD08D; --bad: #F58A98; --panel: rgba(18, 28, 23, 0.97);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B1310; --surface: #121C17; --surface-2: #1B2822; --ink: #E4EEE8; --muted: #93A89D;
+  --line: #29392F; --accent: #EDB041; --accent-ink: #1A1405; --focus: #6FD3AE;
+  --you: #A5E05A; --rival: #B994FF; --good: #5FD08D; --bad: #F58A98; --panel: rgba(18, 28, 23, 0.97);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.45; }
+.app {
+  display: flex; flex-direction: column; gap: 10px; padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+h1 { font-size: 21px; font-weight: 800; line-height: 1.1; white-space: nowrap; }
+h2 { font-size: 24px; font-weight: 800; line-height: 1.1; }
+h3 { font-size: 15px; font-weight: 700; line-height: 1.2; }
+button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.mono { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+
+/* top bar */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.track { flex: 1 1 320px; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.genLbl { font: 600 13px var(--font-body); white-space: nowrap; }
+.genLbl b { font-family: var(--font-data); font-weight: 500; }
+.pips { flex: 1 1 auto; display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 3px; min-width: 120px; }
+.pip { height: 8px; border-radius: 2px; background: var(--surface-2); border: 1px solid var(--line); position: relative; overflow: hidden; }
+.pip i { position: absolute; inset: 0; width: 0; background: var(--accent); }
+.pip.done i { width: 100%; background: var(--ink); opacity: .55; }
+.run { display: flex; gap: 6px; align-items: center; flex: 0 0 auto; }
+.btn {
+  font: 600 13px var(--font-body); padding: 7px 14px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap;
+}
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.btn.big { font-size: 15px; padding: 10px 20px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { font: 500 12px var(--font-data); padding: 7px 9px; border: 0; background: var(--surface); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+/* main */
+.main { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.stage { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0; }
+.dishBox { position: relative; border-radius: 8px; overflow: hidden; background: #0D1F19; aspect-ratio: 1.6; max-width: 100%; display: flex; align-items: center; justify-content: center; }
+#arena { display: block; width: 100%; height: 100%; }
+.legend {
+  position: absolute; top: 8px; left: 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 4px 9px; border-radius: 6px;
+  background: rgba(8, 20, 15, 0.78); color: #E6F0EA; font-size: 12px; max-width: calc(100% - 16px);
+}
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.chartPanel { display: flex; flex-direction: column; gap: 4px; min-height: 0; }
+.chartHead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.chartHead span { font-size: 12px; color: var(--muted); }
+.chartBox { position: relative; height: 180px; border-radius: 8px; overflow: hidden; background: #0D1F19; }
+#chart { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* overlays on the stage */
+.overlay {
+  position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
+  padding: 12px; background: rgba(6, 14, 10, 0.55); border-radius: 8px; overflow-y: auto;
+}
+.card {
+  width: min(680px, 100%); max-height: 100%; overflow-y: auto; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+}
+.eyebrow { margin: 0; font: 500 12px var(--font-data); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.card p { margin: 0; }
+.rules { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 5px; }
+.versus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.vs { border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; }
+.vs .who { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.vs .big { font: 800 28px var(--font-display); line-height: 1; }
+.vs .big small { font: 500 13px var(--font-data); color: var(--muted); margin-left: 6px; }
+.vs .row { font-size: 12.5px; color: var(--muted); }
+.mut { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.mcard {
+  text-align: left; font: inherit; color: var(--ink); background: var(--surface); cursor: pointer;
+  border: 1.5px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+}
+.mcard:hover { border-color: var(--accent); }
+.mcard .nm { font: 700 16px var(--font-display); letter-spacing: -0.01em; }
+.mcard .tx { font-size: 13px; color: var(--muted); }
+.reveal { display: flex; flex-direction: column; gap: 10px; }
+.rv { border-radius: 9px; padding: 10px 12px; background: var(--surface-2); display: flex; flex-direction: column; gap: 4px; }
+.rv .head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+.chip { font: 600 11px var(--font-body); letter-spacing: .05em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid currentColor; }
+.chip.good { color: var(--good); } .chip.bad { color: var(--bad); }
+.delta { font-size: 13px; }
+.up { color: var(--good); font-weight: 600; } .down { color: var(--bad); font-weight: 600; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.verdict { font: 800 30px var(--font-display); letter-spacing: -0.02em; line-height: 1.05; }
+
+/* sidebar */
+.side {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; min-height: 0;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+}
+.secT { margin: 0 0 4px; font: 600 11px var(--font-body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+th { text-align: right; font: 600 12px var(--font-body); padding: 0 4px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child { text-align: left; color: var(--muted); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; }
+th .ico { vertical-align: -2px; margin-right: 4px; }
+td { padding: 3px 4px; border-bottom: 1px solid var(--line); }
+td.num { text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+tr.alive td { font-weight: 600; font-size: 14px; }
+td .lead { color: var(--good); }
+.floorNote { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+.flash { animation: flash 2.4s ease-out 1; }
+@keyframes flash { 0% { background: color-mix(in srgb, var(--accent) 45%, transparent); } 100% { background: transparent; } }
+.log { flex: 1 1 auto; min-height: 70px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.log .ent { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 2px 6px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.log .g { font-family: var(--font-data); color: var(--muted); grid-row: span 2; }
+.log .empty { color: var(--muted); }
+.ico { flex: 0 0 auto; }
+
+@media (min-width: 760px) and (min-height: 540px) {
+  .app { height: 100%; overflow: hidden; }
+  .main { flex: 1 1 auto; display: grid; grid-template-columns: minmax(0, 1fr) clamp(300px, 29vw, 370px); }
+  .dishBox { flex: 1 1 64%; aspect-ratio: auto; min-height: 0; }
+  .chartPanel { flex: 1 1 36%; min-height: 110px; max-height: 240px; }
+  .chartBox { flex: 1 1 auto; height: auto; min-height: 0; }
+  #arena { position: absolute; width: auto; height: auto; }
+  .side { overflow: hidden; }
+}
+@media (max-width: 560px) { .mut, .versus { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .flash { animation: none; } }
+</style>
+
+<div class="app">
+  <header class="top">
+    <h1>Mutation Showdown</h1>
+    <div class="track">
+      <span class="genLbl">Generation <b id="genNum">1</b> of 15</span>
+      <div class="pips" id="pips" aria-hidden="true"></div>
+    </div>
+    <div class="run">
+      <button type="button" class="btn" id="pause" disabled>Pause</button>
+      <div class="seg" role="group" aria-label="Game speed" id="speed">
+        <button type="button" data-speed="1" aria-pressed="false">1×</button>
+        <button type="button" data-speed="2" aria-pressed="true">2×</button>
+        <button type="button" data-speed="4" aria-pressed="false">4×</button>
+        <button type="button" data-speed="8" aria-pressed="false">8×</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="stage" id="stage">
+      <div class="dishBox" id="dishBox">
+        <canvas id="arena" role="img" aria-label="The environment: food, your species, the rival species and predators. The sidebar lists the counts."></canvas>
+        <div class="legend" id="legend"></div>
+      </div>
+      <section class="chartPanel" aria-label="Population graph">
+        <div class="chartHead"><h3>Population over 15 generations</h3><span>Living creatures of each species</span></div>
+        <div class="chartBox" id="chartBox"><canvas id="chart" role="img" aria-label="Line graph comparing the populations of your species and the rival species over time."></canvas></div>
+      </section>
+      <div class="overlay" id="overlay"><div class="card" id="panel" role="dialog" aria-modal="false" aria-labelledby="panelTitle"></div></div>
+    </div>
+
+    <aside class="side" aria-label="Scoreboard, traits and mutation log">
+      <section>
+        <h3 class="secT">Scoreboard</h3>
+        <table>
+          <thead><tr><th>Totals</th><th id="thYou"></th><th id="thRival"></th></tr></thead>
+          <tbody id="score"></tbody>
+        </table>
+        <p class="floorNote" id="floorNote" hidden></p>
+      </section>
+      <section>
+        <h3 class="secT">Traits</h3>
+        <table>
+          <thead><tr><th>Trait</th><th id="thYou2"></th><th id="thRival2"></th></tr></thead>
+          <tbody id="traits"></tbody>
+        </table>
+      </section>
+      <section style="display:flex;flex-direction:column;min-height:0;flex:1 1 auto">
+        <h3 class="secT">Mutation log</h3>
+        <div class="log" id="log"><p class="empty">Mutations you and the rival receive will be listed here.</p></div>
+      </section>
+    </aside>
+  </main>
+</div>
+
+<script>
+(function () {
+'use strict';
+
+/* ============ GAME ENGINE (no DOM) ============ */
+var W = 960, H = 600;
+var FOOD = {
+  seed:  { name: 'Seeds',   color: '#F2B84B', energy: 24 },
+  berry: { name: 'Berries', color: '#E8485A', energy: 24 },
+  fruit: { name: 'Tree fruit', color: '#5AA9FF', energy: 24 }
+};
+var BASE = { speed: 46, vision: 70, seedEff: 1, berryEff: 0.2, handle: 0.3, alert: 40, armor: 0, camo: 0, agility: 0, metab: 1, reach: 0 };
+var LIMITS = {
+  reach: [0, 3], speed: [36, 70], vision: [45, 150], seedEff: [0.8, 1.6], berryEff: [0.2, 1.1], handle: [0.08, 0.5],
+  alert: [25, 130], armor: [0, 0.6], camo: [-0.3, 0.6], agility: [0, 0.6], metab: [0.85, 1.35]
+};
+var TRAIT_INFO = [
+  { k: 'speed',    label: 'Speed',              fmt: function (v) { return v.toFixed(0); },          better: 1 },
+  { k: 'vision',   label: 'Food sensing',       fmt: function (v) { return v.toFixed(0); },          better: 1 },
+  { k: 'seedEff',  label: 'Seed eating',        fmt: function (v) { return '×' + v.toFixed(2); },    better: 1 },
+  { k: 'berryEff', label: 'Berry eating',       fmt: function (v) { return '×' + v.toFixed(2); },    better: 1 },
+  { k: 'handle',   label: 'Time to eat',        fmt: function (v) { return v.toFixed(2) + ' s'; },   better: -1 },
+  { k: 'alert',    label: 'Predator alertness', fmt: function (v) { return v.toFixed(0); },          better: 1 },
+  { k: 'agility',  label: 'Escape burst',       fmt: function (v) { return '+' + Math.round(v * 100) + '%'; }, better: 1 },
+  { k: 'armor',    label: 'Toughness',          fmt: function (v) { return Math.round(v * 100) + '%'; }, better: 1 },
+  { k: 'camo',     label: 'Camouflage',         fmt: function (v) { return Math.round(v * 100) + '%'; }, better: 1 },
+  { k: 'metab',    label: 'Energy use',         fmt: function (v) { return '×' + v.toFixed(2); },    better: -1 },
+  { k: 'reach',    label: 'Tree reach',         fmt: function (v) { return ['None', 'Low', 'Middle', 'High'][Math.round(v)]; }, better: 1 }
+];
+
+/* Mutation pool. Names describe a body change, not what it is good for.
+   names/texts step forward each time a species already carries that mutation. */
+var MUTATIONS = [
+  // protection from predators
+  { id: 'thick', kind: 'defense', fx: { armor: 0.18 },
+    names: ['Thicker skin', 'Even thicker skin', 'Leathery skin'],
+    texts: ['The outer layer of skin grows thicker.', 'The skin thickens further.', 'The skin becomes tough and leathery.'] },
+  { id: 'mottled', kind: 'defense', fx: { camo: 0.22 },
+    names: ['Mottled coloring', 'Darker mottling', 'Blotchy coloring'],
+    texts: ['Patches of darker and lighter color appear.', 'The color patches grow darker.', 'The patches spread and blend into each other.'] },
+  { id: 'eyes', kind: 'defense', fx: { alert: 25 },
+    names: ['Wide-set eyes', 'Eyes set even wider', 'Bulging eyes'],
+    texts: ['The eyes sit farther apart on the head.', 'The eyes move farther toward the sides of the head.', 'The eyes bulge outward from the head.'] },
+  { id: 'plates', kind: 'defense', fx: { armor: 0.14, alert: 6 },
+    names: ['Bony plates', 'Larger bony plates', 'Overlapping plates'],
+    texts: ['Small hard plates form along the back.', 'The plates on the back grow larger.', 'The plates grow until they overlap.'] },
+  { id: 'twitch', kind: 'defense', fx: { alert: 14, agility: 0.1 },
+    names: ['Twitchy reflexes', 'Quicker reflexes', 'Hair-trigger reflexes'],
+    texts: ['Muscles react faster to sudden movement.', 'Reactions get faster still.', 'The slightest movement sets off a reaction.'] },
+  // feeding
+  { id: 'jaw', kind: 'feeding', fx: { seedEff: 0.12 },
+    names: ['Stronger jaw', 'Even stronger jaw', 'Grinding molars'],
+    texts: ['The jaw muscles grow larger.', 'The jaw muscles grow larger again.', 'Flat, grinding teeth form at the back of the mouth.'] },
+  { id: 'gut', kind: 'feeding', fx: { berryEff: 0.22 },
+    names: ['Longer gut', 'Even longer gut', 'Extra stomach chamber'],
+    texts: ['The digestive tract grows longer.', 'The digestive tract lengthens again.', 'A new chamber forms in the stomach.'] },
+  { id: 'tongue', kind: 'feeding', fx: { handle: -0.06 },
+    names: ['Quicker tongue', 'Even quicker tongue', 'Sticky tongue'],
+    texts: ['The tongue moves faster.', 'The tongue speeds up again.', 'The tongue becomes sticky.'] },
+  { id: 'nose', kind: 'feeding', fx: { vision: 22 },
+    names: ['Keener nose', 'Larger nostrils', 'Extra smell receptors'],
+    texts: ['The nose picks up fainter smells.', 'The nostrils grow wider.', 'More smell-sensing cells grow inside the nose.'] },
+  { id: 'bacteria', kind: 'feeding', fx: { berryEff: 0.15, seedEff: 0.04 },
+    names: ['New gut bacteria', 'More kinds of gut bacteria', 'Thriving gut bacteria'],
+    texts: ['Different bacteria live in the gut.', 'Even more kinds of bacteria move into the gut.', 'The bacteria in the gut multiply.'] },
+  { id: 'neck', kind: 'feeding', fx: { reach: 1 },
+    names: ['Longer neck', 'Even longer neck', 'Stretching neck'],
+    texts: ['The neck grows longer.', 'The neck lengthens again.', 'The neck can stretch far upward.'] },
+  // movement
+  { id: 'legs', kind: 'movement', fx: { speed: 4 },
+    names: ['Longer legs', 'Even longer legs', 'Long, slender legs'],
+    texts: ['The leg bones grow longer.', 'The legs lengthen again.', 'The legs become long and thin.'] },
+  { id: 'frame', kind: 'movement', fx: { speed: 2, metab: -0.04 },
+    names: ['Lighter frame', 'Hollow bones', 'Slimmer build'],
+    texts: ['The body becomes lighter.', 'Air spaces form inside the bones.', 'The body becomes narrower.'] },
+  { id: 'tail', kind: 'movement', fx: { agility: 0.12 },
+    names: ['Flexible tail', 'More flexible tail', 'Whip-like tail'],
+    texts: ['The tail bends more easily.', 'The tail becomes even more bendable.', 'The tail grows long and whip-like.'] },
+  { id: 'feet', kind: 'movement', fx: { metab: -0.06 },
+    names: ['Padded feet', 'Softer foot pads', 'Springy foot pads'],
+    texts: ['Soft pads form on the bottoms of the feet.', 'The foot pads become softer and thicker.', 'The foot pads become springy.'] },
+  { id: 'stride', kind: 'movement', fx: { speed: 3, vision: 6 },
+    names: ['Longer stride', 'Even longer stride', 'Bounding gait'],
+    texts: ['Each step covers more ground.', 'Each step stretches out further.', 'The species begins to move in long bounds.'] },
+  { id: 'claws', kind: 'movement', fx: { reach: 1 },
+    names: ['Curved claws', 'Sharper curved claws', 'Gripping toes'],
+    texts: ['The claws on the feet curve downward.', 'The claws grow sharper and more curved.', 'The toes can wrap around and hold on.'] },
+  // harmful (written to sound just as plausible)
+  { id: 'bright', kind: 'harmful', fx: { camo: -0.18 },
+    names: ['Bright patterning', 'Brighter colors', 'Bold stripes'],
+    texts: ['Bold, bright colors appear on the body.', 'The colors on the body grow brighter.', 'Bright stripes run the length of the body.'] },
+  { id: 'heavy', kind: 'harmful', fx: { speed: -5 },
+    names: ['Heavier bones', 'Even denser bones', 'Thick-boned build'],
+    texts: ['The skeleton becomes denser.', 'The bones grow denser again.', 'The bones become thick and solid.'] },
+  { id: 'heart', kind: 'harmful', fx: { metab: 0.12 },
+    names: ['Faster heartbeat', 'Racing heartbeat', 'Larger heart'],
+    texts: ['The heart beats more quickly.', 'The heart beats faster still.', 'The heart grows larger and works harder.'] },
+  { id: 'body', kind: 'harmful', fx: { metab: 0.08, speed: -2 },
+    names: ['Larger body', 'Even larger body', 'Bulky build'],
+    texts: ['The body grows bigger overall.', 'The body grows bigger again.', 'The body becomes thick and bulky.'] },
+  { id: 'snout', kind: 'harmful', fx: { seedEff: -0.1 },
+    names: ['Narrow snout', 'Thinner snout', 'Needle-like snout'],
+    texts: ['The snout becomes long and thin.', 'The snout narrows further.', 'The snout becomes needle-thin.'] }
+];
+
+var TREE = { n: 4, cap: 16, bands: [[30, 44], [16, 30], [0, 16]], r: 46 };
+var GEN_LEN = 25, GENERATIONS = 15, START_POP = 14, FLOOR = 4;
+var CELL = 64, CAP_FOOD = 140, CAP_CREATURES = 300;
+var EAT_R = 11, REPRO_E = 75, REPRO_COST = 50, CHILD_E = 40, MAX_E = 120, MATURE = 8, WALL = 14;
+var PRED = { n: 6, speed: 48, lunge: 78, lungeR: 60, lungeMax: 3.0, tired: 1.4, wander: 30, sense: 140,
+             strike: 11, restKill: 3.0, restMiss: 1.2, turn: 5.5 };
+
+function clampTrait(k, v) { var l = LIMITS[k]; return Math.max(l[0], Math.min(l[1], v)); }
+function applyMutation(traits, m) {
+  var before = {}, k;
+  for (k in m.fx) { before[k] = traits[k]; traits[k] = clampTrait(k, traits[k] + m.fx[k]); }
+  return before;
+}
+function timesCarried(spState, m) {
+  var n = 0; for (var i = 0; i < spState.picks.length; i++) if (spState.picks[i].id === m.id) n++; return n;
+}
+function canChange(traits, m) {
+  for (var k in m.fx) if (Math.abs(clampTrait(k, traits[k] + m.fx[k]) - traits[k]) > 1e-9) return true;
+  return false;
+}
+/* One card from each kind, shuffled. Each card carries the name a species would see given what it already has. */
+function dealCards(rng, spState) {
+  var kinds = ['defense', 'feeding', 'movement', 'harmful'], hand = [];
+  kinds.forEach(function (kind) {
+    var pool = MUTATIONS.filter(function (m) { return m.kind === kind; });
+    var open = pool.filter(function (m) { return canChange(spState.traits, m); });
+    if (open.length) pool = open;
+    var m = pool[(rng() * pool.length) | 0], n = Math.min(timesCarried(spState, m), m.names.length - 1);
+    hand.push({ m: m, name: m.names[n], text: m.texts[n] });
+  });
+  for (var i = hand.length - 1; i > 0; i--) { var j = (rng() * (i + 1)) | 0, t = hand[i]; hand[i] = hand[j]; hand[j] = t; }
+  return hand;
+}
+/* Rival strategy: value each card by what is killing the species right now and by any food
+   the other species is not using; usually takes the best card, sometimes a random one. */
+var RIVAL_FOCUS = 0.7;
+function scoreCard(card, g, me, other) {
+  var sp = g.sp[me], T = sp.traits, s = sp.stats, s0 = sp.genStart;
+  var eaten = s.eaten - s0.eaten, starved = s.starved - s0.starved, tot = eaten + starved + 1;
+  var wDef = 0.6 + 1.6 * eaten / tot, wFood = 0.6 + 1.6 * starved / tot;
+  var openBerries = g.sp[other].traits.berryEff < 0.45 ? 1.5 : 0;
+  var openTrees = g.sp[other].traits.reach <= T.reach ? 0.25 : 0;
+  var VAL = { speed: 0.1 * (wDef + wFood) / 2, vision: 0.018 * wFood, seedEff: 3.5 * wFood, berryEff: (2.5 + openBerries) * wFood,
+              handle: -6 * wFood, reach: (0.45 + openTrees) * wFood, alert: 0.02 * wDef, agility: 2.5 * wDef, armor: 3 * wDef, camo: 2.5 * wDef, metab: -6 };
+  var sc = 0;
+  for (var k in card.m.fx) sc += VAL[k] * (clampTrait(k, T[k] + card.m.fx[k]) - T[k]);
+  return sc;
+}
+function rivalChoose(cards, g, rng, focus) {
+  if (rng() > (focus === undefined ? RIVAL_FOCUS : focus)) return cards[(rng() * cards.length) | 0];
+  var best = cards[0], bs = -1e9;
+  cards.forEach(function (c) { var v = scoreCard(c, g, 'rival', 'you'); if (v > bs) { bs = v; best = c; } });
+  return best;
+}
+function upkeepOf(T) { return (1.6 + 0.0006 * T.speed * T.speed) * T.metab; }
+
+function createGame(rng) {
+  var g = {
+    t: 0, gen: 1, creatures: [], preds: [], food: [], events: [],
+    growth: { seed: 6, berry: 5, fruit: 1.6 }, acc: { seed: 0, berry: 0, fruit: 0 }, trees: [],
+    sp: {}
+  };
+  ['you', 'rival'].forEach(function (id) {
+    var T = {}; for (var k in BASE) T[k] = BASE[k];
+    g.sp[id] = { traits: T, stats: { born: 0, starved: 0, eaten: 0, old: 0, escaped: 0 }, genStart: null, picks: [] };
+  });
+  var cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL), grid = [];
+
+  function spawnFood(type) {
+    if (type === 'fruit') {
+      var tr = g.trees[(rng() * g.trees.length) | 0];
+      if (tr.fruit >= TREE.cap) return;
+      var u = rng(), h = u < 0.4 ? 1 : (u < 0.75 ? 2 : 3);
+      var band = TREE.bands[h - 1], rr = band[0] + rng() * (band[1] - band[0]), ang = rng() * 6.283;
+      tr.fruit++;
+      g.food.push({ type: 'fruit', h: h, tree: tr, x: tr.x + Math.cos(ang) * rr, y: tr.y + Math.sin(ang) * rr, rot: 0, dead: false });
+      return;
+    }
+    g.food.push({ type: type, x: 10 + rng() * (W - 20), y: 10 + rng() * (H - 20), rot: rng() * 3.14, dead: false });
+  }
+  function foodCount(type) { var n = 0; for (var i = 0; i < g.food.length; i++) if (g.food[i].type === type && !g.food[i].dead) n++; return n; }
+  function ev(kind, x, y, sp) { if (g.events.length < 200) g.events.push({ kind: kind, x: x, y: y, sp: sp }); }
+  function make(sp, x, y, e, age) {
+    return { sp: sp, x: x, y: y, a: rng() * 6.283, e: e, age: age, life: 80 + rng() * 40, tgt: null, search: rng() * 0.3, handle: 0, flee: 0, dead: null };
+  }
+  g.count = function (sp) { var n = 0; for (var i = 0; i < g.creatures.length; i++) if (g.creatures[i].sp === sp) n++; return n; };
+  g.foodCount = foodCount;
+  g.snapshotGen = function () {
+    ['you', 'rival'].forEach(function (id) {
+      var s = g.sp[id].stats;
+      g.sp[id].genStart = { born: s.born, starved: s.starved, eaten: s.eaten, old: s.old };
+    });
+  };
+
+  // setup
+  // trees: spread out, away from the walls
+  for (var tt = 0; tt < 200 && g.trees.length < TREE.n; tt++) {
+    var tx = 90 + rng() * (W - 180), ty = 90 + rng() * (H - 180), ok = true;
+    for (var j = 0; j < g.trees.length; j++) { var ddx = g.trees[j].x - tx, ddy = g.trees[j].y - ty; if (ddx * ddx + ddy * ddy < 230 * 230) ok = false; }
+    if (ok) g.trees.push({ x: tx, y: ty, fruit: 0 });
+  }
+  ['seed', 'berry'].forEach(function (f) { for (var i = 0; i < 50; i++) spawnFood(f); });
+  for (var fi = 0; fi < 36; fi++) spawnFood('fruit');
+  ['you', 'rival'].forEach(function (id) {
+    for (var i = 0; i < START_POP; i++) g.creatures.push(make(id, 40 + rng() * (W - 80), 40 + rng() * (H - 80), 50 + rng() * 15, rng() * 40));
+  });
+  for (var p = 0; p < PRED.n; p++) g.preds.push({ x: rng() * W, y: rng() * H, a: rng() * 6.283, rest: 3 + rng() * 3, tgt: null, search: 0, lungeT: 0 });
+  g.snapshotGen();
+
+  function buildGrid() {
+    grid = new Array(cols * rows);
+    for (var i = 0; i < grid.length; i++) grid[i] = [];
+    for (i = 0; i < g.food.length; i++) {
+      var f = g.food[i]; if (f.dead) continue;
+      var gx = Math.min(cols - 1, Math.max(0, (f.x / CELL) | 0)), gy = Math.min(rows - 1, Math.max(0, (f.y / CELL) | 0));
+      grid[gy * cols + gx].push(f);
+    }
+  }
+  function bestFood(c, T) {
+    var best = null, bs = 0, r = Math.ceil(T.vision / CELL), v2 = T.vision * T.vision;
+    var cx = Math.min(cols - 1, Math.max(0, (c.x / CELL) | 0)), cy = Math.min(rows - 1, Math.max(0, (c.y / CELL) | 0));
+    for (var gy = Math.max(0, cy - r); gy <= Math.min(rows - 1, cy + r); gy++) {
+      for (var gx = Math.max(0, cx - r); gx <= Math.min(cols - 1, cx + r); gx++) {
+        var cell = grid[gy * cols + gx];
+        for (var i = 0; i < cell.length; i++) {
+          var f = cell[i]; if (f.dead) continue;
+          var dx = f.x - c.x, dy = f.y - c.y, d2 = dx * dx + dy * dy;
+          if (d2 > v2) continue;
+          if (f.type === 'fruit' && f.h > T.reach) continue;
+          var eff = f.type === 'seed' ? T.seedEff : (f.type === 'berry' ? T.berryEff : 1);
+          var sc = eff / (Math.sqrt(d2) + 25);
+          if (sc > bs) { bs = sc; best = f; }
+        }
+      }
+    }
+    return best;
+  }
+  function turnToward(o, want, maxTurn) {
+    var d = want - o.a;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    o.a += Math.max(-maxTurn, Math.min(maxTurn, d));
+  }
+  function bounce(o) {
+    if (o.x < WALL) { o.x = WALL; o.a = Math.PI - o.a; }
+    if (o.x > W - WALL) { o.x = W - WALL; o.a = Math.PI - o.a; }
+    if (o.y < WALL) { o.y = WALL; o.a = -o.a; }
+    if (o.y > H - WALL) { o.y = H - WALL; o.a = -o.a; }
+  }
+
+  g.step = function (dt) {
+    ['seed', 'berry', 'fruit'].forEach(function (type) {
+      g.acc[type] += g.growth[type] * dt;
+      while (g.acc[type] >= 1) { g.acc[type] -= 1; if (foodCount(type) < CAP_FOOD) spawnFood(type); }
+    });
+    buildGrid();
+    var cnt = { you: g.count('you'), rival: g.count('rival') };
+    var safe = { you: cnt.you <= FLOOR, rival: cnt.rival <= FLOOR };
+
+    // predators
+    g.preds.forEach(function (p) {
+      if (p.rest > 0) {
+        p.rest -= dt; p.tgt = null;
+        p.a += (rng() - 0.5) * 2 * dt;
+        p.x += Math.cos(p.a) * 8 * dt; p.y += Math.sin(p.a) * 8 * dt; bounce(p);
+        return;
+      }
+      if (p.tgt && (p.tgt.dead || safe[p.tgt.sp])) p.tgt = null;
+      if (p.tgt) {
+        var t = p.tgt, dx = t.x - p.x, dy = t.y - p.y, d = Math.sqrt(dx * dx + dy * dy);
+        var range = PRED.sense * (1 - g.sp[t.sp].traits.camo);
+        if (d > range * 1.6) { p.tgt = null; p.lungeT = 0; }
+      }
+      p.search -= dt;
+      if (!p.tgt && p.search <= 0) {
+        p.search = 0.3;
+        var best = null, bd = 1e9;
+        for (var i = 0; i < g.creatures.length; i++) {
+          var c = g.creatures[i]; if (c.dead || safe[c.sp]) continue;
+          var r = PRED.sense * (1 - g.sp[c.sp].traits.camo);
+          var ddx = c.x - p.x, ddy = c.y - p.y, dd = ddx * ddx + ddy * ddy;
+          if (dd < r * r && dd < bd) { bd = dd; best = c; }
+        }
+        p.tgt = best; p.lungeT = 0;
+      }
+      if (p.tgt) {
+        var tg = p.tgt, ex = tg.x - p.x, ey = tg.y - p.y, de = Math.sqrt(ex * ex + ey * ey);
+        turnToward(p, Math.atan2(ey, ex), PRED.turn * dt);
+        var v = PRED.speed;
+        if (de < PRED.lungeR) { v = PRED.lunge; p.lungeT += dt; }
+        if (p.lungeT > PRED.lungeMax) { p.rest = PRED.tired; p.lungeT = 0; p.tgt = null; return; }
+        p.x += Math.cos(p.a) * v * dt; p.y += Math.sin(p.a) * v * dt; bounce(p);
+        if (de < PRED.strike) {
+          var Tt = g.sp[tg.sp].traits;
+          if (rng() < Tt.armor) {
+            tg.flee = 1.2; p.rest = PRED.restMiss; g.sp[tg.sp].stats.escaped++; ev('escape', tg.x, tg.y, tg.sp);
+          } else {
+            tg.dead = 'eaten'; p.rest = PRED.restKill;
+          }
+          p.tgt = null; p.lungeT = 0;
+        }
+      } else {
+        p.a += (rng() - 0.5) * 6 * dt;
+        p.x += Math.cos(p.a) * PRED.wander * dt; p.y += Math.sin(p.a) * PRED.wander * dt; bounce(p);
+      }
+    });
+
+    // creatures
+    var list = g.creatures, n = list.length, born = [];
+    var start = n ? (rng() * n) | 0 : 0;
+    for (var k = 0; k < n; k++) {
+      var c = list[(start + k) % n];
+      if (c.dead) continue;
+      var T = g.sp[c.sp].traits, prot = safe[c.sp];
+      c.age += dt;
+      c.e -= upkeepOf(T) * dt;
+      if (c.e <= 0) { if (prot) c.e = 2; else { c.dead = 'starved'; continue; } }
+      if (c.age > c.life) { if (prot) c.age = c.life - 10; else { c.dead = 'old'; continue; } }
+
+      // threat check
+      var threat = null, td = T.alert * T.alert;
+      for (var q = 0; q < g.preds.length; q++) {
+        var P = g.preds[q]; if (P.rest > 0 || P.tgt !== c) continue;
+        var px = c.x - P.x, py = c.y - P.y, pd = px * px + py * py;
+        if (pd < td) { td = pd; threat = P; }
+      }
+      if (threat) { c.flee = Math.max(c.flee, 0.5); turnToward(c, Math.atan2(c.y - threat.y, c.x - threat.x), 9 * dt); }
+      if (c.flee > 0) {
+        c.flee -= dt; c.handle = 0; c.tgt = null;
+        var fv = T.speed * (1.25 + T.agility);
+        c.e -= 0.5 * dt;
+        c.x += Math.cos(c.a) * fv * dt; c.y += Math.sin(c.a) * fv * dt; bounce(c);
+      } else if (c.handle > 0) {
+        c.handle -= dt;
+      } else {
+        if (c.tgt && c.tgt.dead) c.tgt = null;
+        c.search -= dt;
+        if (!c.tgt && c.search <= 0) { c.tgt = bestFood(c, T); c.search = 0.15 + rng() * 0.15; }
+        if (c.tgt) {
+          var dx2 = c.tgt.x - c.x, dy2 = c.tgt.y - c.y;
+          if (dx2 * dx2 + dy2 * dy2 < EAT_R * EAT_R) {
+            var eff = c.tgt.type === 'seed' ? T.seedEff : (c.tgt.type === 'berry' ? T.berryEff : 1);
+            c.e = Math.min(MAX_E, c.e + FOOD[c.tgt.type].energy * eff);
+            if (c.tgt.tree) c.tgt.tree.fruit--;
+            c.handle = T.handle + (c.tgt.h ? 0.15 * c.tgt.h : 0);
+            c.tgt.dead = true; c.tgt = null;
+          } else turnToward(c, Math.atan2(dy2, dx2), 7 * dt);
+        } else c.a += (rng() - 0.5) * 10 * dt;
+        if (c.handle <= 0) { c.x += Math.cos(c.a) * T.speed * dt; c.y += Math.sin(c.a) * T.speed * dt; bounce(c); }
+      }
+
+      if (c.e >= REPRO_E && c.age >= MATURE && list.length + born.length < CAP_CREATURES && rng() < dt) {
+        c.e -= REPRO_COST;
+        born.push(make(c.sp, c.x + (rng() - 0.5) * 16, c.y + (rng() - 0.5) * 16, CHILD_E, 0));
+        g.sp[c.sp].stats.born++; ev('birth', c.x, c.y, c.sp);
+      }
+    }
+    var alive = [];
+    for (var i2 = 0; i2 < list.length; i2++) {
+      var cc = list[i2];
+      if (cc.dead) { g.sp[cc.sp].stats[cc.dead]++; ev(cc.dead, cc.x, cc.y, cc.sp); } else alive.push(cc);
+    }
+    g.creatures = alive.concat(born);
+    g.food = g.food.filter(function (f) { return !f.dead; });
+    g.t += dt;
+  };
+  return g;
+}
+/* ============ END GAME ENGINE ============ */
+
+
+var DT = 1 / 30;
+var COL = { you: '#A5E05A', rival: '#B994FF', pred: '#FF5A4E' };
+var NAME = { you: 'Your species', rival: 'Rival species' };
+function $(id) { return document.getElementById(id); }
+var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+function icon(sp, size) {
+  var c = size / 2, r = size / 2 - 1.5;
+  if (sp === 'you') return '<svg class="ico" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true"><circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="' + COL.you + '" stroke="rgba(15,33,27,.85)" stroke-width="1.3"/></svg>';
+  if (sp === 'rival') {
+    var pts = [];
+    for (var i = 0; i < 3; i++) { var a = -Math.PI / 2 + i * 2 * Math.PI / 3; pts.push((c + Math.cos(a) * r).toFixed(1) + ',' + (c + 1 + Math.sin(a) * r).toFixed(1)); }
+    return '<svg class="ico" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true"><polygon points="' + pts.join(' ') + '" fill="' + COL.rival + '" stroke="rgba(15,33,27,.85)" stroke-width="1.3" stroke-linejoin="round"/></svg>';
+  }
+  return '<svg class="ico" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true"><polygon points="' + (size - 1) + ',' + c + ' 1,1 ' + (size * 0.3) + ',' + c + ' 1,' + (size - 1) + '" fill="' + COL.pred + '"/></svg>';
+}
+function dot(color, size) {
+  var c = size / 2;
+  return '<svg class="ico" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true"><circle cx="' + c + '" cy="' + c + '" r="' + (c - 1.5) + '" fill="' + color + '"/></svg>';
+}
+$('legend').innerHTML = '<span>' + icon('you', 13) + 'You</span><span>' + icon('rival', 13) + 'Rival</span><span>' + icon('pred', 13) + 'Predator</span>' +
+  '<span>' + dot(FOOD.seed.color, 10) + 'Seeds</span><span>' + dot(FOOD.berry.color, 10) + 'Berries</span><span>' + dot(FOOD.fruit.color, 10) + 'Tree fruit</span>';
+['thYou', 'thYou2'].forEach(function (id) { $(id).innerHTML = icon('you', 12) + 'You'; });
+['thRival', 'thRival2'].forEach(function (id) { $(id).innerHTML = icon('rival', 12) + 'Rival'; });
+var pipsEl = $('pips');
+for (var pi = 0; pi < GENERATIONS; pi++) { var d = document.createElement('div'); d.className = 'pip'; d.innerHTML = '<i></i>'; pipsEl.appendChild(d); }
+
+/* ---------- game state ---------- */
+var game, phase = 'intro', speed = 2, history = [], lastSample = 0, fx = [];
+var genAlive = { you: 0, rival: 0 }, log = [], lastChange = { you: {}, rival: {} };
+
+function newGame() {
+  game = createGame(Math.random);
+  phase = 'intro'; history = []; lastSample = 0; fx = []; log = [];
+  lastChange = { you: {}, rival: {} };
+  genAlive = { you: game.count('you'), rival: game.count('rival') };
+  record();
+  renderLog(); renderTraits(); renderScore(); showIntro(); updateTop();
+}
+function record() { history.push({ t: game.t, you: game.count('you'), rival: game.count('rival') }); lastSample = game.t; }
+
+/* ---------- panels ---------- */
+var overlay = $('overlay'), panel = $('panel');
+function openPanel(html) { panel.innerHTML = html; overlay.hidden = false; var b = panel.querySelector('[data-focus]'); if (b) b.focus({ preventScroll: true }); }
+function closePanel() { overlay.hidden = true; }
+
+function showIntro() {
+  openPanel(
+    '<p class="eyebrow">How to play</p><h2 id="panelTitle">Can your species outlast the rival?</h2>' +
+    '<ul class="rules">' +
+      '<li>' + icon('you', 13) + ' <b>Your species</b> and ' + icon('rival', 13) + ' <b>the rival species</b> start out identical. Both eat seeds. Berries grow too, but neither species can digest them well yet.</li>' +
+      '<li>' + dot(FOOD.fruit.color, 11) + ' <b>Fruit grows in the trees</b> at three heights: low branches on the outer ring, middle branches, and the treetop in the center. At first, neither species can reach any of it.</li>' +
+      '<li>' + icon('pred', 13) + ' <b>Predators</b> hunt both species.</li>' +
+      '<li>After each generation, a new mutation appears in your species. You choose which one to pass on. The rival evolves too: its mutations tend to fit whatever is killing it, but it can still end up with a harmful one.</li>' +
+      '<li>Every set of four mutations includes one that is <b>harmful</b>. You won’t be told which one. A harmful mutation can shrink your population, but it can’t wipe your species out.</li>' +
+      '<li>After <b>15 generations</b>, the species with more living creatures wins.</li>' +
+    '</ul>' +
+    '<div class="actions"><button type="button" class="btn primary big" data-act="start" data-focus>Start generation 1</button></div>'
+  );
+}
+function speciesReport(sp) {
+  var s = game.sp[sp].stats, g0 = game.sp[sp].genStart, now = game.count(sp), diff = now - genAlive[sp];
+  return '<div class="vs"><div class="who">' + icon(sp, 14) + NAME[sp] + '</div>' +
+    '<div class="big">' + now + '<small>' + (diff >= 0 ? '+' : '') + diff + '</small></div>' +
+    '<div class="row">Born ' + (s.born - g0.born) + ' · Starved ' + (s.starved - g0.starved) + ' · Eaten ' + (s.eaten - g0.eaten) + ' · Old age ' + (s.old - g0.old) + '</div></div>';
+}
+var hand = [];
+function showChoice() {
+  hand = dealCards(Math.random, game.sp.you);
+  var h = '<p class="eyebrow">Generation ' + game.gen + ' complete</p>' +
+    '<div class="versus">' + speciesReport('you') + speciesReport('rival') + '</div>' +
+    '<h2 id="panelTitle">Choose a mutation to pass on</h2>' +
+    '<p>These mutations appeared in your species. Only one can spread. One of them is harmful.</p><div class="mut">';
+  hand.forEach(function (c, i) {
+    h += '<button type="button" class="mcard" data-pick="' + i + '"' + (i === 0 ? ' data-focus' : '') + '><span class="nm">' + c.name + '</span><span class="tx">' + c.text + '</span></button>';
+  });
+  openPanel(h + '</div>');
+}
+function deltaText(before, traits) {
+  var parts = [];
+  Object.keys(before).forEach(function (k) {
+    var info = TRAIT_INFO.filter(function (t) { return t.k === k; })[0];
+    var a = before[k], b = traits[k];
+    if (Math.abs(b - a) < 1e-9) { parts.push(info.label + ' ' + info.fmt(a) + ' (already at its limit)'); return; }
+    var good = (b - a) * info.better > 0;
+    parts.push(info.label + ' ' + info.fmt(a) + ' → <span class="' + (good ? 'up' : 'down') + '">' + info.fmt(b) + ' ' + (good ? '▲' : '▼') + '</span>');
+  });
+  return parts.join('; ');
+}
+function revealBlock(sp, card, before) {
+  var harmful = card.m.kind === 'harmful';
+  return '<div class="rv"><div class="head">' + icon(sp, 14) + (sp === 'you' ? 'Your species' : 'The rival species') + ': ' + card.name +
+    ' <span class="chip ' + (harmful ? 'bad' : 'good') + '">' + (harmful ? 'Harmful' : 'Helpful') + '</span></div>' +
+    '<div class="delta">' + deltaText(before, game.sp[sp].traits) + '</div></div>';
+}
+function pick(i) {
+  var card = hand[i];
+  var rcard = rivalChoose(dealCards(Math.random, game.sp.rival), game, Math.random);
+  var before = applyMutation(game.sp.you.traits, card.m);
+  var rbefore = applyMutation(game.sp.rival.traits, rcard.m);
+  lastChange = { you: before, rival: rbefore };
+  game.sp.you.picks.push(card.m); game.sp.rival.picks.push(rcard.m);
+  log.unshift({ gen: game.gen, you: { m: card.m, name: card.name }, rival: { m: rcard.m, name: rcard.name } });
+  renderLog(); renderTraits(true);
+  phase = 'reveal';
+  openPanel('<p class="eyebrow">Mutations spread</p><h2 id="panelTitle">Here is what changed</h2><div class="reveal">' +
+    revealBlock('you', card, before) + revealBlock('rival', rcard, rbefore) + '</div>' +
+    '<div class="actions"><button type="button" class="btn primary big" data-act="next" data-focus>Start generation ' + (game.gen + 1) + '</button></div>');
+}
+function showResults() {
+  var y = game.count('you'), r = game.count('rival');
+  var verdict = y > r ? 'Your species wins!' : (r > y ? 'The rival species wins' : 'It’s a tie');
+  var sub = y > r ? 'Your species outnumbers the rival ' + y + ' to ' + r + ' after 15 generations.'
+    : (r > y ? 'The rival outnumbers your species ' + r + ' to ' + y + ' after 15 generations.' : 'Both species finished with ' + y + ' creatures.');
+  var helpful = game.sp.you.picks.filter(function (m) { return m.kind !== 'harmful'; }).length;
+  var rhelpful = game.sp.rival.picks.filter(function (m) { return m.kind !== 'harmful'; }).length;
+  function tot(sp) {
+    var s = game.sp[sp].stats;
+    return '<div class="vs"><div class="who">' + icon(sp, 14) + NAME[sp] + '</div><div class="big">' + game.count(sp) + '</div>' +
+      '<div class="row">Total born ' + s.born + ' · Starved ' + s.starved + ' · Eaten ' + s.eaten + ' · Old age ' + s.old + '</div>' +
+      '<div class="row">Helpful mutations: ' + (sp === 'you' ? helpful : rhelpful) + ' of ' + game.sp[sp].picks.length + '</div></div>';
+  }
+  openPanel('<p class="eyebrow">Generation 15 complete</p><div class="verdict" id="panelTitle">' + verdict + '</div><p>' + sub + '</p>' +
+    '<div class="versus">' + tot('you') + tot('rival') + '</div>' +
+    '<p>Look back through the mutation log. Which mutations helped your species most, and how did the predators and food supply decide which ones mattered?</p>' +
+    '<div class="actions"><button type="button" class="btn" data-act="hide">View the dish</button><button type="button" class="btn primary big" data-act="again" data-focus>Play again</button></div>');
+}
+panel.addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.pick !== undefined) { pick(parseInt(b.dataset.pick, 10)); return; }
+  var act = b.dataset.act;
+  if (act === 'start') { closePanel(); beginGeneration(); }
+  else if (act === 'next') { game.gen++; game.snapshotGen(); closePanel(); beginGeneration(); }
+  else if (act === 'again') newGame();
+  else if (act === 'hide') { closePanel(); pauseBtn.disabled = false; pauseBtn.textContent = 'Show results'; }
+});
+
+/* ---------- generation flow ---------- */
+var pauseBtn = $('pause');
+function beginGeneration() {
+  genAlive = { you: game.count('you'), rival: game.count('rival') };
+  phase = 'running'; pauseBtn.disabled = false; pauseBtn.textContent = 'Pause';
+  updateTop();
+}
+function endGeneration() {
+  record();
+  pauseBtn.disabled = true;
+  renderScore();
+  if (game.gen >= GENERATIONS) { phase = 'over'; showResults(); }
+  else { phase = 'choose'; showChoice(); }
+  updateTop();
+}
+pauseBtn.addEventListener('click', function () {
+  if (phase === 'running') { phase = 'paused'; pauseBtn.textContent = 'Resume'; }
+  else if (phase === 'paused') { phase = 'running'; pauseBtn.textContent = 'Pause'; }
+  else if (phase === 'over') { showResults(); pauseBtn.disabled = true; }
+});
+$('speed').addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  speed = parseInt(b.dataset.speed, 10);
+  var all = $('speed').children;
+  for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-pressed', String(all[i] === b));
+});
+function updateTop() {
+  $('genNum').textContent = game.gen;
+  var pips = pipsEl.children, into = Math.max(0, Math.min(1, (game.t - (game.gen - 1) * GEN_LEN) / GEN_LEN));
+  for (var i = 0; i < pips.length; i++) {
+    var done = i < game.gen - 1 || (i === game.gen - 1 && (phase === 'choose' || phase === 'reveal' || phase === 'over'));
+    pips[i].className = 'pip' + (done ? ' done' : '');
+    pips[i].firstChild.style.width = done ? '' : (i === game.gen - 1 ? (into * 100) + '%' : '0');
+  }
+}
+
+/* ---------- sidebar ---------- */
+function renderScore() {
+  var rows = [['Alive', function (sp) { return game.count(sp); }, true],
+              ['Born', function (sp) { return game.sp[sp].stats.born; }],
+              ['Starved', function (sp) { return game.sp[sp].stats.starved; }],
+              ['Eaten by predators', function (sp) { return game.sp[sp].stats.eaten; }],
+              ['Died of old age', function (sp) { return game.sp[sp].stats.old; }],
+              ['Escaped an attack', function (sp) { return game.sp[sp].stats.escaped; }]];
+  var h = '';
+  rows.forEach(function (r) {
+    var a = r[1]('you'), b = r[1]('rival');
+    h += '<tr' + (r[2] ? ' class="alive"' : '') + '><td>' + r[0] + '</td><td class="num">' + (r[2] && a > b ? '<span class="lead">' + a + '</span>' : a) +
+      '</td><td class="num">' + (r[2] && b > a ? '<span class="lead">' + b + '</span>' : b) + '</td></tr>';
+  });
+  $('score').innerHTML = h;
+  var fl = [];
+  ['you', 'rival'].forEach(function (sp) { if (game.count(sp) <= FLOOR) fl.push(sp === 'you' ? 'Your species is' : 'The rival is'); });
+  var note = $('floorNote');
+  note.hidden = !fl.length;
+  if (fl.length) note.textContent = fl.join(' and ') + ' down to its last ' + FLOOR + ' survivors, hiding in a refuge. They can’t die out, but they need better traits to grow again.';
+}
+function renderTraits(flash) {
+  var h = '';
+  TRAIT_INFO.forEach(function (t) {
+    var a = game.sp.you.traits[t.k], b = game.sp.rival.traits[t.k];
+    function cell(sp, v) {
+      var ch = lastChange[sp][t.k], cls = '';
+      if (ch !== undefined && Math.abs(ch - v) > 1e-9) {
+        var good = (v - ch) * t.better > 0;
+        return '<td class="num' + (flash ? ' flash' : '') + '"><span class="' + (good ? 'up' : 'down') + '">' + t.fmt(v) + (good ? ' ▲' : ' ▼') + '</span></td>';
+      }
+      return '<td class="num">' + t.fmt(v) + '</td>';
+    }
+    h += '<tr><td>' + t.label + '</td>' + cell('you', a) + cell('rival', b) + '</tr>';
+  });
+  $('traits').innerHTML = h;
+}
+function renderLog() {
+  var el = $('log');
+  if (!log.length) { el.innerHTML = '<p class="empty">Mutations you and the rival receive will be listed here.</p>'; return; }
+  el.innerHTML = log.map(function (e) {
+    function line(sp) {
+      var x = e[sp], harm = x.m.kind === 'harmful';
+      return '<span>' + icon(sp, 11) + ' <b>' + x.name + '</b> <span class="' + (harm ? 'down' : 'up') + '">' + (harm ? '▼' : '▲') + '</span></span>';
+    }
+    return '<div class="ent"><span class="g">G' + e.gen + '</span>' + line('you') + line('rival') + '</div>';
+  }).join('');
+}
+
+/* ---------- drawing ---------- */
+var dishBox = $('dishBox'), arenaCv = $('arena'), actx = arenaCv.getContext('2d');
+var chartBox = $('chartBox'), chartCv = $('chart'), cctx = chartCv.getContext('2d');
+var chartW = 600, chartH = 180;
+var oneScreen = window.matchMedia('(min-width: 760px) and (min-height: 540px)');
+function fitCanvases() {
+  var dpr = Math.min(2, window.devicePixelRatio || 1);
+  var r = dishBox.getBoundingClientRect(), w, h;
+  if (oneScreen.matches) { w = Math.min(r.width, r.height * 1.6); h = w / 1.6; arenaCv.style.width = w + 'px'; arenaCv.style.height = h + 'px'; }
+  else { arenaCv.style.width = ''; arenaCv.style.height = ''; w = r.width; h = w / 1.6; }
+  arenaCv.width = Math.max(1, Math.round(w * dpr)); arenaCv.height = Math.max(1, Math.round(h * dpr));
+  var c = chartBox.getBoundingClientRect();
+  chartW = Math.max(1, c.width); chartH = Math.max(1, c.height);
+  chartCv.width = Math.round(chartW * dpr); chartCv.height = Math.round(chartH * dpr);
+  cctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+function drawArena() {
+  var s = arenaCv.width / W;
+  actx.setTransform(s, 0, 0, s, 0, 0); actx.globalAlpha = 1;
+  actx.fillStyle = '#0D1F19'; actx.fillRect(0, 0, W, H);
+  actx.strokeStyle = 'rgba(160,205,182,0.06)'; actx.lineWidth = 1; actx.beginPath();
+  for (var gx = 60; gx < W; gx += 60) { actx.moveTo(gx, 0); actx.lineTo(gx, H); }
+  for (var gy = 60; gy < H; gy += 60) { actx.moveTo(0, gy); actx.lineTo(W, gy); }
+  actx.stroke();
+  var i, f, c;
+  // trees: canopy with rings for low, middle and high branches
+  game.trees.forEach(function (tr) {
+    actx.fillStyle = 'rgba(46,122,68,0.30)'; actx.beginPath(); actx.arc(tr.x, tr.y, TREE.r, 0, 6.283); actx.fill();
+    actx.fillStyle = 'rgba(46,122,68,0.30)'; actx.beginPath(); actx.arc(tr.x, tr.y, TREE.bands[0][0], 0, 6.283); actx.fill();
+    actx.fillStyle = 'rgba(46,122,68,0.35)'; actx.beginPath(); actx.arc(tr.x, tr.y, TREE.bands[1][0], 0, 6.283); actx.fill();
+    actx.strokeStyle = 'rgba(150,215,165,0.35)'; actx.lineWidth = 1.2; actx.beginPath(); actx.arc(tr.x, tr.y, TREE.r, 0, 6.283); actx.stroke();
+    actx.fillStyle = '#6B4A2B'; actx.beginPath(); actx.arc(tr.x, tr.y, 4, 0, 6.283); actx.fill();
+  });
+  actx.fillStyle = FOOD.fruit.color; actx.strokeStyle = 'rgba(10,25,40,0.9)'; actx.lineWidth = 1; actx.beginPath();
+  for (i = 0; i < game.food.length; i++) { f = game.food[i]; if (f.type === 'fruit') { actx.moveTo(f.x + 3.6, f.y); actx.arc(f.x, f.y, 3.6, 0, 6.283); } }
+  actx.fill(); actx.stroke();
+  actx.fillStyle = FOOD.seed.color; actx.beginPath();
+  for (i = 0; i < game.food.length; i++) { f = game.food[i]; if (f.type === 'seed') { actx.moveTo(f.x + 3.8, f.y); actx.ellipse(f.x, f.y, 3.8, 2.3, f.rot, 0, 6.283); } }
+  actx.fill();
+  actx.fillStyle = FOOD.berry.color; actx.beginPath();
+  for (i = 0; i < game.food.length; i++) { f = game.food[i]; if (f.type === 'berry') { actx.moveTo(f.x + 4, f.y); actx.arc(f.x, f.y, 4, 0, 6.283); } }
+  actx.fill();
+  actx.fillStyle = 'rgba(255,255,255,0.55)'; actx.beginPath();
+  for (i = 0; i < game.food.length; i++) { f = game.food[i]; if (f.type === 'berry') { actx.moveTo(f.x - 0.4, f.y - 1.4); actx.arc(f.x - 1.4, f.y - 1.4, 1.1, 0, 6.283); } }
+  actx.fill();
+
+  actx.lineWidth = 1.2;
+  for (i = 0; i < game.creatures.length; i++) {
+    c = game.creatures[i];
+    actx.globalAlpha = 0.4 + 0.6 * Math.min(1, c.e / 70);
+    actx.fillStyle = COL[c.sp]; actx.strokeStyle = 'rgba(255,255,255,0.75)'; actx.beginPath();
+    if (c.sp === 'you') actx.arc(c.x, c.y, 7.5, 0, 6.283);
+    else {
+      for (var k = 0; k < 3; k++) {
+        var ang = c.a + k * 2.0944, px = c.x + Math.cos(ang) * 9, py = c.y + Math.sin(ang) * 9;
+        if (k === 0) actx.moveTo(px, py); else actx.lineTo(px, py);
+      }
+      actx.closePath();
+    }
+    actx.fill(); actx.stroke();
+    actx.fillStyle = '#0A1713'; actx.beginPath(); actx.arc(c.x + Math.cos(c.a) * 3.2, c.y + Math.sin(c.a) * 3.2, 1.7, 0, 6.283); actx.fill();
+  }
+  actx.globalAlpha = 1;
+  // predators
+  game.preds.forEach(function (p) {
+    actx.save(); actx.translate(p.x, p.y); actx.rotate(p.a);
+    actx.globalAlpha = p.rest > 0 ? 0.45 : 1;
+    actx.fillStyle = COL.pred; actx.strokeStyle = 'rgba(255,255,255,0.8)'; actx.lineWidth = 1.4;
+    actx.beginPath(); actx.moveTo(15, 0); actx.lineTo(-10, -10); actx.lineTo(-4, 0); actx.lineTo(-10, 10); actx.closePath();
+    actx.fill(); actx.stroke();
+    actx.restore();
+    if (p.tgt && p.rest <= 0) {
+      actx.globalAlpha = 0.35; actx.strokeStyle = COL.pred; actx.lineWidth = 1; actx.setLineDash([3, 4]);
+      actx.beginPath(); actx.moveTo(p.x, p.y); actx.lineTo(p.tgt.x, p.tgt.y); actx.stroke(); actx.setLineDash([]); actx.globalAlpha = 1;
+    }
+  });
+  if (!reduceMotion) {
+    for (i = 0; i < fx.length; i++) {
+      var e = fx[i];
+      if (e.kind === 'birth') {
+        var pr = e.age / 0.5; actx.globalAlpha = 1 - pr; actx.strokeStyle = COL[e.sp]; actx.lineWidth = 1.5;
+        actx.beginPath(); actx.arc(e.x, e.y, 8 + pr * 14, 0, 6.283); actx.stroke();
+      } else if (e.kind === 'eaten') {
+        var q = e.age / 0.9; actx.globalAlpha = 1 - q; actx.fillStyle = COL.pred;
+        for (var s2 = 0; s2 < 6; s2++) { var a2 = s2 * 1.047; actx.beginPath(); actx.arc(e.x + Math.cos(a2) * (4 + q * 14), e.y + Math.sin(a2) * (4 + q * 14), 2, 0, 6.283); actx.fill(); }
+      } else if (e.kind === 'starved') {
+        actx.globalAlpha = 1 - e.age; actx.strokeStyle = '#F58A98'; actx.lineWidth = 2; actx.beginPath();
+        actx.moveTo(e.x - 4, e.y - 4); actx.lineTo(e.x + 4, e.y + 4); actx.moveTo(e.x + 4, e.y - 4); actx.lineTo(e.x - 4, e.y + 4); actx.stroke();
+      } else if (e.kind === 'escape') {
+        actx.globalAlpha = 1 - e.age / 0.9; actx.strokeStyle = '#FFFFFF'; actx.lineWidth = 2;
+        actx.beginPath(); actx.arc(e.x, e.y, 11, 0, 6.283); actx.stroke();
+      } else {
+        actx.globalAlpha = 0.6 * (1 - e.age / 0.8); actx.fillStyle = '#C9D6CE';
+        actx.beginPath(); actx.arc(e.x, e.y, 3, 0, 6.283); actx.fill();
+      }
+    }
+    actx.globalAlpha = 1;
+  }
+}
+function stepFx(dtReal) {
+  var ev = game.events;
+  for (var i = 0; i < ev.length; i++) fx.push({ kind: ev[i].kind, x: ev[i].x, y: ev[i].y, sp: ev[i].sp, age: 0 });
+  ev.length = 0;
+  if (fx.length > 160) fx.splice(0, fx.length - 160);
+  var keep = [];
+  for (var j = 0; j < fx.length; j++) { fx[j].age += dtReal; if (fx[j].age < (fx[j].kind === 'birth' ? 0.5 : 0.9)) keep.push(fx[j]); }
+  fx = reduceMotion ? [] : keep;
+}
+function niceStep(range, maxTicks) {
+  var raw = range / maxTicks, pow = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+  var opts = [1, 2, 5, 10];
+  for (var i = 0; i < opts.length; i++) if (opts[i] * pow >= raw) return opts[i] * pow;
+  return 10 * pow;
+}
+var MONO = '11px "IBM Plex Mono", ui-monospace, Menlo, monospace';
+function drawChart() {
+  var VW = chartW, VH = chartH;
+  cctx.clearRect(0, 0, VW, VH); cctx.fillStyle = '#0D1F19'; cctx.fillRect(0, 0, VW, VH);
+  var L = 36, R = 34, T = 12, B = 22, pw = VW - L - R, ph = VH - T - B;
+  if (pw < 20 || ph < 20) return;
+  cctx.font = MONO; cctx.textBaseline = 'middle';
+  var tMax = GEN_LEN * GENERATIONS, top = 20;
+  history.forEach(function (h) { top = Math.max(top, h.you, h.rival); });
+  var yStep = niceStep(top * 1.05, Math.max(2, Math.min(5, Math.floor(ph / 28)))), yMax = Math.ceil(top * 1.05 / yStep) * yStep;
+  function X(t) { return L + t / tMax * pw; }
+  function Y(n) { return T + ph - n / yMax * ph; }
+  // current generation band
+  if (phase !== 'over') {
+    cctx.fillStyle = 'rgba(237,176,65,0.08)';
+    cctx.fillRect(X((game.gen - 1) * GEN_LEN), T, X(game.gen * GEN_LEN) - X((game.gen - 1) * GEN_LEN), ph);
+  }
+  cctx.strokeStyle = 'rgba(160,205,182,0.14)'; cctx.lineWidth = 1; cctx.fillStyle = '#9FB5AA'; cctx.textAlign = 'right';
+  for (var v = 0; v <= yMax + 1e-9; v += yStep) {
+    cctx.beginPath(); cctx.moveTo(L, Math.round(Y(v)) + 0.5); cctx.lineTo(L + pw, Math.round(Y(v)) + 0.5); cctx.stroke();
+    cctx.fillText(String(v), L - 7, Y(v));
+  }
+  cctx.textAlign = 'center';
+  var every = pw / GENERATIONS < 22 ? 2 : 1;
+  for (var gIdx = 0; gIdx <= GENERATIONS; gIdx++) {
+    var gxp = Math.round(X(gIdx * GEN_LEN)) + 0.5;
+    cctx.beginPath(); cctx.moveTo(gxp, T); cctx.lineTo(gxp, T + ph); cctx.stroke();
+    if (gIdx < GENERATIONS && (gIdx % every === 0)) cctx.fillText(String(gIdx + 1), X((gIdx + 0.5) * GEN_LEN), VH - 10);
+  }
+  ['rival', 'you'].forEach(function (sp) {
+    cctx.strokeStyle = COL[sp]; cctx.lineWidth = sp === 'you' ? 2.6 : 2.2; cctx.lineJoin = 'round'; cctx.beginPath();
+    history.forEach(function (h, i) { var px = X(h.t), py = Y(h[sp]); if (i === 0) cctx.moveTo(px, py); else cctx.lineTo(px, py); });
+    cctx.stroke();
+  });
+  if (history.length) {
+    var last = history[history.length - 1], ends = [
+      { y: Y(last.you), n: last.you, c: COL.you }, { y: Y(last.rival), n: last.rival, c: COL.rival }].sort(function (a, b) { return a.y - b.y; });
+    ends[0].ly = ends[0].y; ends[1].ly = Math.max(ends[1].y, ends[0].ly + 13);
+    cctx.textAlign = 'left';
+    ends.forEach(function (e) {
+      cctx.fillStyle = e.c; cctx.beginPath(); cctx.arc(X(last.t), e.y, 3.5, 0, 6.283); cctx.fill();
+      cctx.fillText(String(e.n), X(last.t) + 7, Math.min(e.ly, T + ph));
+    });
+  }
+}
+
+/* ---------- loop ---------- */
+var lastTs = 0, acc = 0, uiAcc = 0, chartAcc = 0;
+function frame(ts) {
+  var dtReal = Math.min(0.1, (ts - lastTs) / 1000); lastTs = ts;
+  if (phase === 'running') {
+    acc += dtReal * speed;
+    var steps = 0, genEnd = game.gen * GEN_LEN;
+    while (acc >= DT && steps < 30 && phase === 'running') {
+      game.step(DT); acc -= DT; steps++;
+      if (game.t - lastSample >= 1 - 1e-9) record();
+      if (game.t >= genEnd - 1e-9) { acc = 0; endGeneration(); }
+    }
+    if (steps >= 30) acc = 0;
+  }
+  stepFx(dtReal);
+  drawArena();
+  chartAcc += dtReal; if (chartAcc > 0.15) { chartAcc = 0; drawChart(); }
+  uiAcc += dtReal; if (uiAcc > 0.25) { uiAcc = 0; if (phase === 'running' || phase === 'paused') { renderScore(); updateTop(); } }
+  requestAnimationFrame(frame);
+}
+function onResize() { fitCanvases(); drawArena(); drawChart(); }
+if (window.ResizeObserver) { new ResizeObserver(onResize).observe(dishBox); new ResizeObserver(onResize).observe(chartBox); }
+else window.addEventListener('resize', onResize);
+fitCanvases();
+newGame();
+window.__game = function () { return { phase: phase, gen: game.gen }; };
+requestAnimationFrame(function (ts) { lastTs = ts; requestAnimationFrame(frame); });
+})();
+</script>
+
+</body></html>
